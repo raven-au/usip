@@ -1,0 +1,2 @@
+obj-$(CONFIG_USIP) := usip.o
+usip-objs := init.o mtab.o event.o util.o

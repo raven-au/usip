@@ -1,0 +1,23 @@
+Making all in include
+make[1]: Entering directory '/work/autofs/work/usip/lib/include'
+make  all-am
+make[2]: Entering directory '/work/autofs/work/usip/lib/include'
+make[2]: Leaving directory '/work/autofs/work/usip/lib/include'
+make[1]: Leaving directory '/work/autofs/work/usip/lib/include'
+Making all in src
+make[1]: Entering directory '/work/autofs/work/usip/lib/src'
+/bin/sh ../libtool  --tag=CC   --mode=compile gcc -DHAVE_CONFIG_H -I. -I../include  -I. -I/usr/include/libnl3   -Wall -g -O2 -MT event.lo -MD -MP -MF .deps/event.Tpo -c -o event.lo event.c
+libtool: compile:  gcc -DHAVE_CONFIG_H -I. -I../include -I. -I/usr/include/libnl3 -Wall -g -O2 -MT event.lo -MD -MP -MF .deps/event.Tpo -c event.c  -fPIC -DPIC -o .libs/event.o
+event.c: In function ‘usip_handle_notify’:
+event.c:298:11: error: ‘struct event’ has no member named ‘type’
+  if (event->type == type && event->group == group) {
+           ^~
+event.c:299:14: error: ‘struct event’ has no member named ‘callback’
+   ret = event->callback(&event->arg);
+              ^~
+event.c:299:31: error: ‘struct event’ has no member named ‘arg’
+   ret = event->callback(&event->arg);
+                               ^~
+make[1]: *** [Makefile:435: event.lo] Error 1
+make[1]: Leaving directory '/work/autofs/work/usip/lib/src'
+make: *** [Makefile:447: all-recursive] Error 1
