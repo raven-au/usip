@@ -194,6 +194,7 @@ static int usip_get_group(struct mnt_namespace *mnt_ns,
 
 	spin_lock(&listeners_lock);
 	new = usip_match_group(mnt_ns);
+	spin_unlock(&listeners_lock);
 	if (new == -1) {
 		idr_preload(gfp_flag);
 		spin_lock(&listeners_lock);
