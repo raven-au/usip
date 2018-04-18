@@ -661,6 +661,7 @@ static int usip_listeners_init(void)
 					    sizeof(struct notifier),
 					    0, SLAB_HWCACHE_ALIGN, NULL);
 	if (!notifiers_cache) {
+		kmem_cache_destroy(listeners_cache);
 		pr_info("failed to create notifiers kmem cache\n");
 		return -ENOMEM;
 	}
@@ -755,12 +756,16 @@ int __init usip_event_init(void)
 		return err;
 	err = usip_event_notify_pool_init();
 	if (err) {
+		kmem_cache_destroy(notifiers_cache);
+		kmem_cache_destroy(listeners_cache);
 		pr_err("failed to create event notify pool\n");
 		return err;
 	}
 	err = usip_events_workqueue_init();
 	if (err) {
 		usip_event_notify_pool_destroy();
+		kmem_cache_destroy(notifiers_cache);
+		kmem_cache_destroy(listeners_cache);
 		pr_err("failed to create events workqueue\n");
 		return err;
 	}
