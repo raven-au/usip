@@ -26,7 +26,7 @@ static struct kmem_cache *notifiers_cache;
 #define EVENT_HASH_SHIFT  6
 #define EVENT_HASH_SIZE   1 << EVENT_HASH_SHIFT
 
-static DEFINE_SPINLOCK(listeners_lock);
+static DEFINE_MUTEX(listeners_mutex);
 static struct hlist_head listeners_hash[EVENT_HASH_SIZE];
 static unsigned int listeners_list_empty = 0;
 
@@ -192,16 +192,14 @@ static int usip_get_group(struct mnt_namespace *mnt_ns,
 		goto found;
 	}
 
-	spin_lock(&listeners_lock);
+	mutex_lock(&listeners_mutex);
 	new = usip_match_group(mnt_ns);
-	spin_unlock(&listeners_lock);
 	if (new == -1) {
 		idr_preload(gfp_flag);
-		spin_lock(&listeners_lock);
 		new = usip_new_id(mnt_ns, gfp_flag);
-		spin_unlock(&listeners_lock);
 		idr_preload_end();
 	}
+	mutex_unlock(&listeners_mutex);
 
 	if (new < 0) {
 		err = new;
@@ -387,9 +385,9 @@ int usip_event_register(struct sk_buff *skb, struct genl_info *info)
 		if (err < 0) {
 			pr_err("failed to get group\n");
 			err = group;
-			spin_lock(&listeners_lock);
+			mutex_lock(&listeners_mutex);
 			idr_remove(&idr, id);
-			spin_unlock(&listeners_lock);
+			mutex_unlock(&listeners_mutex);
 			goto out;
 		}
 	}
@@ -399,9 +397,9 @@ int usip_event_register(struct sk_buff *skb, struct genl_info *info)
 	listener->flags = flags;
 	listener->event.notifiers = NULL;
 
-	spin_lock(&listeners_lock);
+	mutex_lock(&listeners_mutex);
 	usip_add_listener(listener);
-	spin_unlock(&listeners_lock);
+	mutex_unlock(&listeners_mutex);
 
 	umi.info = info;
 	err = usip_new_msg(&umi, USIP_EVENT_CMD_REGISTER, 0);
@@ -467,11 +465,11 @@ int usip_event_unregister(struct sk_buff *skb, struct genl_info *info)
 		goto out;
 	id = nla_get_s32(info->attrs[USIP_EVENT_ATTR_ID]);
 
-	spin_lock(&listeners_lock);
+	mutex_lock(&listeners_mutex);
 	listener = usip_lookup_listener(group, id);
 	if (listener)
 		usip_del_listener(listener);
-	spin_unlock(&listeners_lock);
+	mutex_unlock(&listeners_mutex);
 	pr_info("unregistered listener\n");
 
 	return usip_send_status_reply(info, USIP_EVENT_CMD_UNREGISTER, 0);
@@ -598,7 +596,7 @@ cont:
 	entry = NULL;
 	hash = hash_ptr(notify->mnt_ns, EVENT_HASH_SHIFT);
 
-	spin_lock(&listeners_lock);
+	mutex_lock(&listeners_mutex);
 	bucket = &listeners_hash[hash];
 
 	if (hlist_empty(bucket)) {
@@ -629,7 +627,7 @@ match:
 		break;
 	}
 done:
-	spin_unlock(&listeners_lock);
+	mutex_unlock(&listeners_mutex);
 	if (!notifier) {
 		pr_info("no notifier match\n");
 		goto next;
@@ -677,7 +675,7 @@ static void usip_listeners_cleanup(void)
 {
 	int i;
 
-	spin_lock(&listeners_lock);
+	mutex_lock(&listeners_mutex);
 	for (i = 0; i < EVENT_HASH_SIZE; i++) {
 		struct hlist_head *bucket;
 		struct hlist_node *pos, *next;
@@ -690,7 +688,7 @@ static void usip_listeners_cleanup(void)
 			usip_del_listener(entry);
 		}
 	}
-	spin_unlock(&listeners_lock);
+	mutex_unlock(&listeners_mutex);
 
 	kmem_cache_destroy(notifiers_cache);
 	kmem_cache_destroy(listeners_cache);
