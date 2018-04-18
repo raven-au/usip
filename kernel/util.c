@@ -106,12 +106,20 @@ out:
 	return err;
 }
 
-int usip_send_notification(struct notifier *notifier,
+int usip_send_notification(struct net *net,
+			   struct notifier *notifier,
 			   struct event_notify *notify)
 {
 	struct usip_message_info umi;
 	unsigned int flags = GFP_KERNEL;
+	struct net *target;
 	int err;
+
+	target = maybe_get_net(net);
+	if (!target) {
+		pr_err("invalid net namespace\n");
+		return -ENOTCONN;
+	}
 
 	err = usip_new_mc_msg(&umi, notify->type, notify->group, flags);
 	if (err)
@@ -127,11 +135,14 @@ int usip_send_notification(struct notifier *notifier,
 
 	pr_info("send multicast message mc_group %d\n", notify->mc_group);
 	genlmsg_end(umi.msg, umi.hdr);
-	genlmsg_multicast(&usip_family, umi.msg, 0, notify->mc_group, flags);
+	err = genlmsg_multicast_netns(&usip_family, net,
+				      umi.msg, 0, notify->mc_group, flags);
+	put_net(target);
 	return 0;
 out:
 	genlmsg_cancel(umi.msg, umi.hdr);
 	nlmsg_free(umi.msg);
+	put_net(target);
 	return err;
 }
 

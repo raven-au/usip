@@ -359,6 +359,7 @@ int usip_event_register(struct sk_buff *skb, struct genl_info *info)
 	listener = kmem_cache_alloc(listeners_cache, GFP_KERNEL);
 	if (!listener)
 		return -ENOMEM;
+	INIT_LIST_HEAD(&listener->notify_net.entry);
 	INIT_HLIST_NODE(&listener->entry);
 
 	err = -EINVAL;
@@ -395,6 +396,7 @@ int usip_event_register(struct sk_buff *skb, struct genl_info *info)
 
 	listener->event.group = group;
 	listener->event.id = id;
+	listener->notify_net.net = genl_info_net(info);
 	listener->flags = flags;
 	listener->event.notifiers = NULL;
 
@@ -557,6 +559,27 @@ next:
 	return this;
 }
 
+static void add_notify_net(struct notify_net *n_net, struct list_head *head)
+{
+	struct notify_net *this;
+
+	if (list_empty(head)) {
+		list_add(&n_net->entry, head);
+		return;
+	}
+
+	/* Number of net namespaces should be small.
+	 * If not this will need to change to a hash list.
+	 */
+	list_for_each_entry(this, head, entry) {
+		if (this->net == n_net->net)
+			continue;
+	}
+
+	if (!this)
+		list_add(&n_net->entry, head);
+}
+
 static void usip_event_handler(struct work_struct *work)
 {
 	struct listener *entry, *this;
@@ -564,6 +587,8 @@ static void usip_event_handler(struct work_struct *work)
 	struct hlist_node *next;
 	struct event_notify *notify;
 	struct notifier *notifier;
+	struct notify_net *nn, *nn_next;
+	LIST_HEAD(notify_nets);
 	u32 hash;
 cont:
 	notifier = NULL;
@@ -598,6 +623,7 @@ cont:
 
 	/* Send a multicast noticication if a match is found */
 	hlist_for_each_entry_safe(this, next, bucket, entry) {
+		struct notifier *matched;
 		void *ptr;
 
 		pr_info("this->event.group %d\n", this->event.group);
@@ -613,26 +639,28 @@ cont:
 		if (ptr != notify->mnt_ns)
 			continue;
 match:
-		notifier = match_notifier(this, notify);
-		if (!notifier)
+		matched = match_notifier(this, notify);
+		if (!matched || !matched->ops || !matched->ops->notify)
 			continue;
-		break;
-	}
-done:
-	mutex_unlock(&listeners_mutex);
-	if (!notifier) {
-		pr_info("no notifier match\n");
-		goto next;
+		notifier = matched;
+		add_notify_net(&this->notify_net, &notify_nets);
 	}
 
-	if (notifier->ops && notifier->ops->notify) {
+	if (!notifier || list_empty(&notify_nets)) {
+		pr_info("no notifier match\n");
+		goto done;
+	}
+
+	list_for_each_entry_safe(nn, nn_next, &notify_nets, entry) {
 		int err;
 
-		err = notifier->ops->notify(notifier, notify);
+		list_del_init(&nn->entry);
+		err = notifier->ops->notify(nn->net, notifier, notify);
 		if (err)
 			pr_err("failed to send notification: %d\n", err);
 	}
-next:
+done:
+	mutex_unlock(&listeners_mutex);
 	usip_event_notify_free(notify);
 	goto cont;
 }

@@ -11,6 +11,7 @@
 #define _INTERNAL_H
 
 #include <uapi/linux/limits.h>
+#include <net/net_namespace.h>
 #include <linux/sched/task.h>
 #include <linux/list.h>
 #include <linux/time.h>
@@ -25,6 +26,11 @@ struct usip_message_info {
 	void *hdr;
 };
 
+struct notify_net {
+	struct net *net;
+	struct list_head entry;
+};
+
 struct event {
 	s32 id;
 	s32 group;
@@ -35,6 +41,7 @@ struct event {
 struct listener {
 	u32 flags;
 	struct event event;
+	struct notify_net notify_net;
 	struct hlist_node entry;
 };
 
@@ -74,7 +81,7 @@ struct usip_notifier_ops {
 	int (*get_request_params)(struct sk_buff* skb, struct notifier *);
 	int (*put_reply_params)(struct sk_buff* skb, struct event_notify *);
 	struct notifier *(*match_notifier)(struct notifier *, struct event_notify *);
-	int (*notify)(struct notifier *, struct event_notify *);
+	int (*notify)(struct net *, struct notifier *, struct event_notify *);
 	void (*release)(struct notifier *);
 };
 
@@ -86,7 +93,8 @@ int usip_new_msg(struct usip_message_info *, u8, unsigned int);
 int usip_send_status(struct usip_message_info *, int, s32);
 int usip_send_status_reply(struct genl_info *, u8, s32);
 int usip_new_mc_msg(struct usip_message_info *, u32, s32, unsigned int);
-int usip_send_notification(struct notifier *, struct event_notify *);
+int usip_send_notification(struct net *,
+			   struct notifier *, struct event_notify *);
 char *get_mp_path(struct path *, struct path *);
 char *get_dev_path(struct path *);
 

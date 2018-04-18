@@ -168,7 +168,9 @@ next:
 	return this;
 }
 
-static int storage_notify(struct notifier *notifier, struct event_notify *notify)
+static int storage_notify(struct net *net,
+			  struct notifier *notifier,
+			  struct event_notify *notify)
 {
 	unsigned int flags = notifier->flags;
 	int ret = 0;
@@ -188,7 +190,7 @@ static int storage_notify(struct notifier *notifier, struct event_notify *notify
 	}
 
 	if (flags & USIP_FLAGS_NOTIFIER_NOTIFY)
-		ret = usip_send_notification(notifier, notify);
+		ret = usip_send_notification(net, notifier, notify);
 
 	return ret;
 }
