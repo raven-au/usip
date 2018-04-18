@@ -240,7 +240,7 @@ int usip_notify_storage_event(unsigned int action, unsigned char cmd, struct pat
 	if (!pid)
 		return -EINVAL;
 
-	new = usip_event_notify_alloc(GFP_ATOMIC);
+	new = usip_event_notify_alloc(GFP_NOWAIT|__GFP_NORETRY);
 	if (!new) {
 		put_pid(pid);
 		return -ENOMEM;

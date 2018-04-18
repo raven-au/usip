@@ -294,7 +294,7 @@ int usip_notify_mtab_event(unsigned int action, unsigned char cmd, u64 event)
 	    !usip_event_handler_running())
 		goto out;
 
-	new = usip_event_notify_alloc(GFP_ATOMIC);
+	new = usip_event_notify_alloc(GFP_NOWAIT|__GFP_NORETRY);
 	if (!new)
 		return -ENOMEM;
 

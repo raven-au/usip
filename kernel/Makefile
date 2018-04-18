@@ -27,8 +27,8 @@ DEPMOD := /sbin/depmod
 all: include-test config-test default
 
 O_HDRS  = usip.h internal.h
-O_SRCS  = init.c event.c notify_pool.c storage.c mtab.c log.c util.c test.c
-O_OBJS  = init.o event.o notify_pool.o storage.o mtab.o log.o util.o test.o
+O_SRCS  = init.c event.c storage.c mtab.c log.c util.c test.c
+O_OBJS  = init.o event.o storage.o mtab.o log.o util.o test.o
 O_OTHER = Makefile
 TARGET	= $(NAME).o
 

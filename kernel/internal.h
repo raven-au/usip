@@ -101,10 +101,7 @@ int usip_event_unregister(struct sk_buff *, struct genl_info *);
 struct notifier *usip_add_notifier(struct notifier *, u32, u32, u8, u32);
 
 struct event_notify *usip_event_notify_alloc(gfp_t);
-struct event_notify *usip_event_notify_realloc(struct event_notify *);
 void usip_event_notify_free(struct event_notify *);
-int usip_event_notify_pool_init(void);
-void usip_event_notify_pool_destroy(void);
 
 int usip_mtab_get_mtab(struct sk_buff *, struct genl_info *);
 void usip_mtab_set_ops(struct notifier *);

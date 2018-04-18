@@ -22,6 +22,7 @@ static struct idr idr;
 
 static struct kmem_cache *listeners_cache;
 static struct kmem_cache *notifiers_cache;
+static struct kmem_cache *event_notify_cache;
 
 #define EVENT_HASH_SHIFT  6
 #define EVENT_HASH_SIZE   1 << EVENT_HASH_SHIFT
@@ -512,11 +513,11 @@ static void usip_event_signal(unsigned long unused)
 
 static struct event_notify *usip_event_wait(unsigned long idle)
 {
-	struct event_notify *notify, *new;
+	struct event_notify *notify;
 	struct list_head *head;
 	unsigned long flags;
 
-	new = NULL;
+	notify = NULL;
 
 	wait_event_timeout(usip_event_wq, usip_events.waiting, idle);
 
@@ -526,20 +527,11 @@ static struct event_notify *usip_event_wait(unsigned long idle)
 		goto out;
 	if (list_empty(&usip_events.events))
 		goto out;
-	new = list_entry(head->next, struct event_notify, entry);
-	list_del_init(&new->entry);
+	notify = list_entry(head->next, struct event_notify, entry);
+	list_del_init(&notify->entry);
 	usip_events.waiting--;
 out:
 	spin_unlock_irqrestore(&usip_event_lock, flags);
-
-	notify = NULL;
-	if (new) {
-		notify = usip_event_notify_realloc(new);
-		if (!notify) {
-			usip_event_notify_free(new);
-			pr_crit("failed to realloc event notify structure\n");
-		}
-	}
 
 	return notify;
 }
@@ -695,6 +687,44 @@ static void usip_listeners_cleanup(void)
 	kmem_cache_destroy(listeners_cache);
 }
 
+struct event_notify *usip_event_notify_alloc(gfp_t flags)
+{
+	struct event_notify *notify;
+
+	notify = kmem_cache_alloc(event_notify_cache, flags);
+	memset(notify, 0, sizeof(struct event_notify));
+	INIT_LIST_HEAD(&notify->entry);
+
+	return notify;
+}
+
+void usip_event_notify_free(struct event_notify *notify)
+{
+	if (notify->ops && notify->ops->release)
+		notify->ops->release(notify);
+	if (!list_empty(&notify->entry))
+		list_del(&notify->entry);
+	kmem_cache_free(event_notify_cache, notify);
+}
+
+static int usip_event_notify_init(void)
+{
+	event_notify_cache = kmem_cache_create("event_notify",
+					       sizeof(struct event_notify),
+					       0, SLAB_HWCACHE_ALIGN, NULL);
+	if (!event_notify_cache) {
+		pr_info("failed to create notify kmem cache\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void usip_event_notify_destroy(void)
+{
+	kmem_cache_destroy(event_notify_cache);
+}
+
 static int usip_events_workqueue_init(void)
 {
 	int err;
@@ -754,16 +784,15 @@ int __init usip_event_init(void)
 	err = usip_listeners_init();
 	if (err)
 		return err;
-	err = usip_event_notify_pool_init();
+	err = usip_event_notify_init();
 	if (err) {
 		kmem_cache_destroy(notifiers_cache);
 		kmem_cache_destroy(listeners_cache);
-		pr_err("failed to create event notify pool\n");
 		return err;
 	}
 	err = usip_events_workqueue_init();
 	if (err) {
-		usip_event_notify_pool_destroy();
+		usip_event_notify_destroy();
 		kmem_cache_destroy(notifiers_cache);
 		kmem_cache_destroy(listeners_cache);
 		pr_err("failed to create events workqueue\n");
@@ -776,6 +805,6 @@ int __init usip_event_init(void)
 void __exit usip_event_exit(void)
 {
 	usip_events_workqueue_shutdown();
-	usip_event_notify_pool_destroy();
+	usip_event_notify_destroy();
 	usip_listeners_cleanup();
 }
